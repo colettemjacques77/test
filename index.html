@@ -3297,21 +3297,23 @@ function initIncomeExpense(){
 const $=i=>document.getElementById(i),J=(k,d)=>{try{return JSON.parse(localStorage.getItem(k))||d}catch(e){return d}},W=(k,v)=>localStorage.setItem(k,JSON.stringify(v));
 const E=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const PUR='rupantor_pos_purchases',SUP='rupantor_pos_supplier_pay',RET='rupantor_pos_returns',WAR='rupantor_pos_warranty',CFG='rupantor_pos_cloud';
-const cfg=()=>J(CFG,{}),dbu=()=>(cfg().db||'').replace(/\/$/,''),aq=()=>cfg().auth?'?auth='+encodeURIComponent(cfg().auth):'';
+const SB_URL='https://xwugazgutqqqvxopsvws.supabase.co',SB_KEY='sb_publishable_N13Nlnp-VQLhWH2XFU85SQ_REaldryT';
+const cfg=()=>{const c=J(CFG,{});return {...c,db:c.db||SB_URL,auth:c.auth||SB_KEY}},dbu=()=>(cfg().db||'').replace(/\/$/,''),aq=()=>'';
 const r2=n=>Math.round(n*100)/100;
 
 /* ===== Public online invoice viewer (opened from QR) ===== */
 const UP=new URLSearchParams(location.search);
 if(UP.get('inv')&&UP.get('db')){
   document.body.innerHTML='<p style="padding:20px;font-family:sans-serif">লোড হচ্ছে…</p>';
+  const pubFetch=(p,o={})=>fetch(UP.get('db').replace(/\/$/,'')+'/rest/v1/'+p,{...o,headers:{apikey:UP.get('key')||'',Authorization:'Bearer '+(UP.get('key')||''),'Content-Type':'application/json',...(o.headers||{})}});
   const IS='width:100%;padding:9px;margin:4px 0;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:8px;font-size:14px';
   function payBlock(x){const p=x.pay||{},ms=[['bKash',p.bkash],['Nagad',p.nagad],['Rocket',p.rocket]].filter(a=>a[1]);if(!(x.due>0)||!ms.length)return '';
     return `<div style="border:1.5px solid #1464d8;border-radius:12px;padding:12px;margin:14px 0;background:#f8fbff"><b>💳 অনলাইন পেমেন্ট</b><p style="margin:6px 0;font-size:13px">নিচের নাম্বারে টাকা পাঠিয়ে TrxID জমা দিন। দোকান যাচাই করলে বাকি আপডেট হবে।</p>${ms.map(a=>`<div style="padding:3px 0">${a[0]}: <b>${E(a[1])}</b></div>`).join('')}<select id="pM" style="${IS}">${ms.map(a=>`<option>${a[0]}</option>`).join('')}</select><input id="pS" placeholder="যে নাম্বার থেকে পাঠিয়েছেন" style="${IS}"><input id="pT" placeholder="Transaction ID (TrxID)" style="${IS}"><input id="pA" type="number" value="${x.due}" max="${x.due}" style="${IS}"><button onclick="xPaySend(${x.due})" style="${IS};background:#1464d8;color:#fff;border:0;font-weight:700">পেমেন্ট জমা দিন</button><p id="pMsg" style="font-size:13px"></p></div>`;}
   window.xPaySend=async due=>{const m=$('pMsg'),a=+$('pA').value,t=$('pT').value.trim(),s=$('pS').value.trim();
     if(!t||!s||!(a>0)||a>due){m.style.color='#d62828';m.textContent='নাম্বার, TrxID ও সঠিক পরিমাণ দিন';return;}
-    try{const r=await fetch(UP.get('db').replace(/\/$/,'')+'/payments/'+encodeURIComponent(UP.get('inv'))+'.json',{method:'POST',body:JSON.stringify({method:$('pM').value,sender:s,trx:t,amount:a,status:'pending',at:Date.now()})});
+    try{const r=await pubFetch('payments',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({inv:UP.get('inv'),data:{method:$('pM').value,sender:s,trx:t,amount:a,status:'pending',at:Date.now()}})});
       m.style.color=r.ok?'#198754':'#d62828';m.textContent=r.ok?'✅ জমা হয়েছে। দোকান যাচাই করলে বাকি আপডেট হবে।':'❌ জমা হয়নি ('+r.status+')';}catch(e){m.style.color='#d62828';m.textContent='❌ নেটওয়ার্ক সমস্যা';}};
-  fetch(UP.get('db').replace(/\/$/,'')+'/invoices/'+encodeURIComponent(UP.get('inv'))+'.json').then(r=>r.json()).then(x=>{
+  pubFetch('invoices?id=eq.'+encodeURIComponent(UP.get('inv'))+'&select=body').then(r=>r.json()).then(a=>{const x=Array.isArray(a)&&a[0]?a[0].body:null;
     document.body.innerHTML=!x?'<p style="padding:20px">Invoice পাওয়া যায়নি</p>':`<div style="max-width:480px;margin:auto;padding:16px;font-family:Arial,'Noto Sans Bengali',sans-serif"><h2 style="text-align:center;margin:0">${E(x.shop)}</h2><p style="text-align:center">Invoice: <b>${E(x.invoiceNo)}</b><br>${new Date(x.date).toLocaleString('en-GB')}<br>Customer: ${E(x.customer)}</p><table style="width:100%;border-collapse:collapse">${(x.items||[]).map(i=>`<tr style="border-bottom:1px solid #ddd"><td style="padding:6px">${E(i.name)}<br><small>${i.qty} × ${i.price}</small></td><td align=right>৳ ${i.qty*i.price}</td></tr>`).join('')}</table><p style="text-align:right">Subtotal: ৳ ${x.subtotal}<br>Discount: ৳ ${x.discount}<br><b>Total: ৳ ${x.total}</b><br>Paid: ৳ ${x.paid}<br>Due: <b style="color:${x.due>0?'#d62828':'#198754'}">৳ ${x.due}</b></p>${payBlock(x)}<button onclick="print()" style="padding:10px 16px">🖨️ Print</button></div>`;
   }).catch(()=>document.body.innerHTML='<p style="padding:20px">লোড করা যায়নি</p>');
   return;
@@ -3387,17 +3389,23 @@ window.xwaR=()=>{const q=($('waQ').value||'').toLowerCase(),now=Date.now();
   $('waList').innerHTML=tbl(['পণ্য','Serial','কাস্টমার','শেষ তারিখ','অবস্থা',''],J(WAR,[]).map(e=>{const d=new Date(e.start);d.setMonth(d.getMonth()+e.mon);e.end=d;return e}).filter(e=>(e.prod+e.sn+e.cust).toLowerCase().includes(q)).sort((a,b)=>a.end-b.end).map(e=>{const left=Math.ceil((e.end-now)/864e5);
     return `<tr><td>${E(e.prod)}</td><td>${E(e.sn)}</td><td>${E(e.cust)}</td><td>${e.end.toLocaleDateString('en-GB')}</td><td style="color:${left<0?'#d62828':left<=30?'#e67e00':'#198754'};font-weight:700">${left<0?'মেয়াদ শেষ':left+' দিন বাকি'}</td><td><button class="danger" onclick="xwaDel(${e.id})">🗑️</button></td></tr>`}));};
 
-/* ===== 5. Cloud sync (Firebase Realtime Database, REST) ===== */
-addPage('cloudPage','☁️','Cloud Sync & Online Invoice',`<p>Firebase Realtime Database URL দিন (যেমন https://your-app-default-rtdb.firebaseio.com)।</p><div class="row"><input id="cDb" placeholder="Database URL" style="flex:2"><input id="cAuth" placeholder="Auth token / secret (ঐচ্ছিক)"><input id="cBase" placeholder="Site URL (GitHub Pages লিংক) — QR এর জন্য" style="flex:2"></div><div class="row" style="margin-top:8px"><input id="cBk" placeholder="bKash নাম্বার"><input id="cNg" placeholder="Nagad নাম্বার"><input id="cRk" placeholder="Rocket নাম্বার"></div><br><div class="row"><button onclick="xcSave()">💾 Save</button><button class="secondary" onclick="xcPush()">⬆️ এখনই Upload</button><button class="danger" onclick="xcPull()">⬇️ Cloud থেকে Restore</button></div><p id="cloudMsg"></p>`,()=>{const c=cfg();$('cDb').value=c.db||'';$('cAuth').value=c.auth||'';$('cBase').value=c.base||'';$('cBk').value=c.bk||'';$('cNg').value=c.ng||'';$('cRk').value=c.rk||'';});
-window.xcSave=()=>{W(CFG,{db:$('cDb').value.trim(),auth:$('cAuth').value.trim(),base:$('cBase').value.trim(),bk:$('cBk').value.trim(),ng:$('cNg').value.trim(),rk:$('cRk').value.trim()});$('cloudMsg').textContent='✅ Saved';};
+/* ===== 5. Cloud sync (Supabase REST) ===== */
+addPage('cloudPage','☁️','Cloud Sync & Online Invoice',`<p>Supabase Project URL, anon key এবং Supabase Authentication-এ তৈরি করা আপনার ইউজারের email/password দিন।</p><div class="row"><input id="cDb" placeholder="Project URL (https://xxxx.supabase.co)" style="flex:2"><input id="cAuth" placeholder="anon public key" style="flex:2"></div><div class="row" style="margin-top:8px"><input id="cEm" placeholder="Supabase login email"><input id="cPw" type="password" placeholder="Supabase login password"><input id="cBase" placeholder="Site URL (GitHub Pages লিংক) — QR এর জন্য" style="flex:2"></div><div class="row" style="margin-top:8px"><input id="cBk" placeholder="bKash নাম্বার"><input id="cNg" placeholder="Nagad নাম্বার"><input id="cRk" placeholder="Rocket নাম্বার"></div><br><div class="row"><button onclick="xcSave()">💾 Save</button><button class="secondary" onclick="xcPush()">⬆️ এখনই Upload</button><button class="danger" onclick="xcPull()">⬇️ Cloud থেকে Restore</button></div><p id="cloudMsg"></p>`,()=>{const c=cfg();$('cDb').value=c.db||'';$('cAuth').value=c.auth||'';$('cEm').value=c.em||'';$('cPw').value=c.pw||'';$('cBase').value=c.base||'';$('cBk').value=c.bk||'';$('cNg').value=c.ng||'';$('cRk').value=c.rk||'';});
+window.xcSave=()=>{_tok=null;W(CFG,{db:$('cDb').value.trim(),auth:$('cAuth').value.trim(),em:$('cEm').value.trim(),pw:$('cPw').value,base:$('cBase').value.trim(),bk:$('cBk').value.trim(),ng:$('cNg').value.trim(),rk:$('cRk').value.trim()});$('cloudMsg').textContent='✅ Saved';};
+let _tok=null,_exp=0;
+async function sbToken(){const c=cfg();if(!c.em||!c.pw)return null;if(_tok&&Date.now()<_exp)return _tok;
+  const r=await fetch(dbu()+'/auth/v1/token?grant_type=password',{method:'POST',headers:{apikey:c.auth,'Content-Type':'application/json'},body:JSON.stringify({email:c.em,password:c.pw})});
+  if(!r.ok)throw new Error('Supabase login ব্যর্থ ('+r.status+') — email/password দেখুন');
+  const j=await r.json();_tok=j.access_token;_exp=Date.now()+Math.max(60,(j.expires_in||3600)-120)*1000;return _tok;}
+async function sb(path,o={}){const t=await sbToken();return fetch(dbu()+'/rest/v1/'+path,{...o,headers:{apikey:cfg().auth||'',Authorization:'Bearer '+(t||cfg().auth||''),'Content-Type':'application/json',...(o.headers||{})}});}
 const ok=k=>/^rupantor_/.test(k)&&!/auto_backup|last_|session|pin|cloud/i.test(k);
-async function push(){if(!dbu())return;const d={};for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(ok(k))d[k]=localStorage.getItem(k);}
-  d.__at=new Date().toISOString();const r=await fetch(dbu()+'/rupantor/data.json'+aq(),{method:'PUT',body:JSON.stringify(d)});
-  const m=$('cloudMsg');if(m)m.textContent=r.ok?'✅ Synced '+new Date().toLocaleTimeString():'❌ Sync failed ('+r.status+') — Firebase rules/token দেখুন';}
-window.xcPush=()=>dbu()?push().catch(e=>$('cloudMsg').textContent='❌ '+e):alert('আগে Database URL Save করুন');
-window.xcPull=async()=>{if(!dbu())return alert('Database URL নেই');if(!confirm('বর্তমান ডাটা Cloud এর ডাটা দিয়ে replace হবে। নিশ্চিত?'))return;
-  try{const d=await (await fetch(dbu()+'/rupantor/data.json'+aq())).json();if(!d)return alert('Cloud এ ডাটা নেই');
-    createAutoBackup&&createAutoBackup(false);Object.keys(d).forEach(k=>ok(k)&&si.call(localStorage,k,d[k]));location.reload();}catch(e){alert('Restore ব্যর্থ: '+e)}};
+async function push(){if(!dbu())return;const rows=[],now=new Date().toISOString();for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(ok(k))rows.push({key:k,value:localStorage.getItem(k),updated_at:now});}
+  const r=await sb('pos_data?on_conflict=key',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify(rows)});
+  const m=$('cloudMsg');if(m)m.textContent=r.ok?'✅ Synced '+new Date().toLocaleTimeString():'❌ Sync failed ('+r.status+') — Supabase table/RLS/login দেখুন';}
+window.xcPush=()=>dbu()?push().catch(e=>$('cloudMsg').textContent='❌ '+e.message):alert('আগে Project URL ও anon key Save করুন');
+window.xcPull=async()=>{if(!dbu())return alert('Project URL নেই');if(!confirm('বর্তমান ডাটা Cloud এর ডাটা দিয়ে replace হবে। নিশ্চিত?'))return;
+  try{const r=await sb('pos_data?select=key,value');if(!r.ok)return alert('Restore ব্যর্থ ('+r.status+')');const rows=await r.json();if(!rows.length)return alert('Cloud এ ডাটা নেই');
+    createAutoBackup&&createAutoBackup(false);rows.forEach(o=>ok(o.key)&&si.call(localStorage,o.key,o.value));location.reload();}catch(e){alert('Restore ব্যর্থ: '+e.message)}};
 let tm;const si=Storage.prototype.setItem;Storage.prototype.setItem=function(k,v){si.call(this,k,v);if(this===localStorage&&ok(k)&&dbu()){clearTimeout(tm);tm=setTimeout(()=>push().catch(()=>{}),4000);}};
 
 /* ===== 6. Online invoice QR + thermal receipt ===== */
@@ -3405,9 +3413,9 @@ const cur=()=>getSales().find(s=>String(s.invoiceNo)===($('invNo').textContent||
 async function publish(x){if(!dbu())throw new Error('Cloud Sync সেটিং আগে করুন');const sales=getSales(),s=sales.find(a=>a.invoiceNo===x.invoiceNo);
   if(!s.pubId){s.pubId=Math.random().toString(36).slice(2,9)+Date.now().toString(36);localStorage.setItem(SALES,JSON.stringify(sales));}
   const body={shop:'রূপান্তর কম্পিউটার',invoiceNo:s.invoiceNo,date:s.date,customer:s.customer,items:s.items,subtotal:s.subtotal,discount:s.discount,total:s.total,paid:s.paid,due:s.due,pay:{bkash:cfg().bk||'',nagad:cfg().ng||'',rocket:cfg().rk||''}};
-  const r=await fetch(dbu()+'/invoices/'+s.pubId+'.json'+aq(),{method:'PUT',body:JSON.stringify(body)});if(!r.ok)throw new Error('Upload failed '+r.status);
+  const r=await sb('invoices?on_conflict=id',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({id:s.pubId,body,updated_at:new Date().toISOString()})});if(!r.ok)throw new Error('Upload failed '+r.status);
   const base=cfg().base||(location.protocol.startsWith('http')?location.origin+location.pathname:'');if(!base)throw new Error('Site URL দিন (hosted index.html লিংক)');
-  return base+'?inv='+s.pubId+'&db='+encodeURIComponent(dbu());}
+  return base+'?inv='+s.pubId+'&db='+encodeURIComponent(dbu())+'&key='+encodeURIComponent(cfg().auth||'');}
 function qrData(t){return new Promise(res=>{const d=document.createElement('div');new QRCode(d,{text:t,width:200,height:200});setTimeout(()=>{const c=d.querySelector('canvas');res(c?c.toDataURL():d.querySelector('img').src)},60)})}
 window.xQR=async()=>{const x=cur();if(!x)return alert('Invoice পাওয়া যায়নি');try{const u=await publish(x),q=await qrData(u),o=document.createElement('div');
   o.style.cssText='position:fixed;inset:0;background:#000a;z-index:99999;display:flex;align-items:center;justify-content:center';
@@ -3424,19 +3432,19 @@ const sim=window.showInvoiceModal;window.showInvoiceModal=function(){const r=sim
 window.xRefreshQR=renderInvQR;
 addPage('payPage','💳','Online Payments',`<div class="row"><button onclick="xpRefresh()">🔄 Refresh</button></div><p id="pyMsg"></p><div id="pyList"></div>`,()=>xpRefresh());
 window.xpRefresh=async()=>{const msg=$('pyMsg'),box=$('pyList');if(!dbu())return msg.textContent='আগে Cloud Sync সেটিং দিন';
-  try{const r=await fetch(dbu()+'/payments.json'+aq());if(!r.ok)return msg.textContent='❌ পড়া যায়নি ('+r.status+') — Auth token/rules দেখুন';
-    const d=await r.json()||{},sales=getSales(),rows=[];Object.entries(d).forEach(([inv,o])=>Object.entries(o||{}).forEach(([k,p])=>rows.push({inv,k,p,s:sales.find(x=>x.pubId===inv)})));
+  try{const r=await sb('payments?select=id,inv,data&order=id.desc');if(!r.ok)return msg.textContent='❌ পড়া যায়নি ('+r.status+') — login/RLS দেখুন';
+    const d=await r.json(),sales=getSales(),rows=d.map(o=>({inv:o.inv,k:o.id,p:o.data,s:sales.find(x=>x.pubId===o.inv)}));
     rows.sort((a,b)=>(a.p.status==='pending'?0:1)-(b.p.status==='pending'?0:1)||b.p.at-a.p.at);msg.textContent=rows.filter(x=>x.p.status==='pending').length+' টি যাচাই বাকি';
     box.innerHTML=tbl(['তারিখ','Invoice','কাস্টমার','Method','TrxID','Sender','পরিমাণ','অবস্থা',''],rows.map(({inv,k,p,s})=>`<tr><td>${new Date(p.at).toLocaleString('en-GB')}</td><td>${s?E(s.invoiceNo):'?'}</td><td>${s?E(s.customer):'-'}</td><td>${E(p.method)}</td><td>${E(p.trx)}</td><td>${E(p.sender)}</td><td>${money(p.amount)}</td><td>${p.status==='pending'?'⏳ pending':p.status==='confirmed'?'✅ confirmed':'❌ rejected'}</td><td>${p.status==='pending'?`<button data-i="${E(inv)}" data-k="${E(k)}" onclick="xpAct(this.dataset.i,this.dataset.k,true)">Confirm</button> <button class="danger" data-i="${E(inv)}" data-k="${E(k)}" onclick="xpAct(this.dataset.i,this.dataset.k,false)">Reject</button>`:''}</td></tr>`));
   }catch(e){msg.textContent='❌ '+e.message}};
-window.xpAct=async(inv,k,yes)=>{const pu=dbu()+'/payments/'+encodeURIComponent(inv)+'/'+encodeURIComponent(k)+'.json'+aq();
-  const p=await (await fetch(pu)).json();if(!p||p.status!=='pending')return xpRefresh();
+window.xpAct=async(inv,k,yes)=>{const pq='payments?id=eq.'+encodeURIComponent(k);
+  const pr=await (await sb(pq+'&select=data')).json();const p=Array.isArray(pr)&&pr[0]?pr[0].data:null;if(!p||p.status!=='pending')return xpRefresh();
   if(yes){const sales=getSales(),x=sales.find(s=>s.pubId===inv);if(!x)return alert('Invoice এই ডিভাইসে পাওয়া যায়নি');
     const amt=Math.min(+p.amount,+x.due);if(!(amt>0))return alert('এই invoice এ বাকি নেই');
     if(!confirm(`${p.method} | TrxID: ${p.trx}\n৳${amt} পেয়েছেন বলে নিশ্চিত?`))return;
     x.paid=r2(+x.paid+amt);x.due=r2(+x.due-amt);(x.onlinePayments=x.onlinePayments||[]).push({method:p.method,trx:p.trx,sender:p.sender,amount:amt,date:new Date().toISOString()});
     localStorage.setItem(SALES,JSON.stringify(sales));renderAll();try{renderDuePage()}catch(e){}}
-  await fetch(pu,{method:'PATCH',body:JSON.stringify({status:yes?'confirmed':'rejected'})});
+  await sb(pq,{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({data:{...p,status:yes?'confirmed':'rejected'}})});
   if(yes){const x=getSales().find(s=>s.pubId===inv);try{await publish(x)}catch(e){}}xpRefresh();};
 
 })();
